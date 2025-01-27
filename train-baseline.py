@@ -4,11 +4,7 @@ import torch.nn as nn
 
 from tqdm import tqdm
 
-import plotly.express as px
-px.defaults.template = 'plotly_dark'
-
 from sklearn.model_selection import train_test_split
-from IPython import display
 
 ITERS = 200
 LR = 1e-2
@@ -55,7 +51,7 @@ class MFBaseline(nn.Module):
 
 
 # Load data
-df = pd.read_csv('../ml-latest-small/ratings.csv')
+df = pd.read_csv('./ml-latest-small/ratings.csv')
 
 unique_users = df.userId.unique()
 unique_movies = df.movieId.unique()
@@ -68,29 +64,30 @@ for i, j, r in zip(df.userId.factorize()[0], df.movieId.factorize()[0], df.ratin
 
 # Split data
 rows, cols = r_ui.isfinite().nonzero().split(1, dim=1)
-
 idx = range(len(rows))
 train_idx, test_idx = train_test_split(idx, test_size=0.2, random_state=SEED)
 
+# Define the model
 mf_baseline = MFBaseline(len(unique_users), len(unique_movies), LATENT_DIM).cuda()
+
+# Get training indices for user and item
 u = rows[train_idx].squeeze().cuda()
 i = cols[train_idx].squeeze().cuda()
 
-u_val = rows[test_idx].squeeze().cuda()
-i_val = cols[test_idx].squeeze().cuda()
+# Get test indices for user and item
+u_test = rows[test_idx].squeeze().cuda()
+i_test = cols[test_idx].squeeze().cuda()
 
-l1 = nn.L1Loss()
+mf_baseline.fit(r_ui, u, i, u_test, i_test, epochs=ITERS, loss_fn='mae', lr=LR, weight_lambda=LAMBDA)
 
-losses = mf_baseline.fit(r_ui, u, i, u_val, i_val, epochs=ITERS, loss_fn='mae', lr=LR, weight_lambda=LAMBDA)
-
+# Test the model
 with torch.no_grad():
-    u = rows[test_idx].squeeze().cuda()
-    i = cols[test_idx].squeeze().cuda()
-
-    mf_loss_test = (mf_baseline(u, i) - r_ui[u, i]).cpu()
+    mf_loss_test = (mf_baseline(u_test, i_test) - r_ui[u_test, i_test]).cpu()
 
 print(f'Baseline test loss: {mf_loss_test.abs().mean().item()}')
 
+# JIT compile the model and save it
 jit_baseline = torch.jit.script(mf_baseline.cpu())
 torch.jit.save(jit_baseline, './baseline.pt')
+
 print('Baseline model saved!')
