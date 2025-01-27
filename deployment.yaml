@@ -13,6 +13,6 @@ spec:
     spec:
       containers:
       - name: python-container
-        image: gcr.io/movie-recommender-449117/python-gke-app:v3
+        image: gcr.io/movie-recommender-449117/python-gke-app:v1
         ports:
         - containerPort: 8080
